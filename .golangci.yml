@@ -1,0 +1,81 @@
+version: "2"
+
+run:
+  modules-download-mode: readonly
+  timeout: 3m
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gofumpt:
+      extra:
+        group-params: true
+        clothe-returns: true
+        balance-calls: true
+    gci:
+      sections:
+        - standard
+        - default
+        - blank
+        - dot
+        - localmodule
+      custom-order: true
+
+linters:
+  default: none
+  enable:
+    - asciicheck
+    - bodyclose
+    - canonicalheader
+    - copyloopvar
+    - dupl
+    - embeddedstructfieldcheck
+    - errcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - gochecknoglobals
+    - gocognit
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - intrange
+    - lll
+    - mirror
+    - misspell
+    - noctx
+    - nolintlint
+    - perfsprint
+    - prealloc
+    - revive
+    - staticcheck
+    - thelper
+    - unused
+    - usetesting
+  exclusions:
+    generated: strict
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters: [dupl, errcheck, gocognit, gosec, noctx]
+  settings:
+    embeddedstructfieldcheck:
+      forbid-mutex: true
+    gocognit:
+      min-complexity: 15
+    lll:
+      tab-width: 4
+      line-length: 100
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      enable-default-rules: true

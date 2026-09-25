@@ -1,11 +1,14 @@
 package plinth_test
 
 import (
+	"context"
 	"encoding/json/jsontext"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"time"
 
 	"github.com/iamroockie/plinth"
 )
@@ -123,6 +126,41 @@ func ExampleJSONMux() {
 	// DELETE /users/42 405
 	// Allow: GET, HEAD
 	// {"error":{"code":"method_not_allowed","message":"Method Not Allowed"}}
+}
+
+func ExampleReadyz() {
+	redisDown := false
+	handler := plinth.Readyz(time.Second, map[string]plinth.CheckFunc{
+		// Methods can be passed as is: pool.Ping for a *pgxpool.Pool,
+		// db.PingContext for a *sql.DB.
+		"postgres": func(context.Context) error { return nil },
+		"redis": func(context.Context) error {
+			if redisDown {
+				return errors.New("connection refused")
+			}
+			return nil
+		},
+	})
+
+	for _, down := range []bool{false, true} {
+		redisDown = down
+
+		// The ErrorLog middleware does this for every request and logs the result.
+		r := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+		r = r.WithContext(plinth.WithErrorReporter(r.Context()))
+
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, r)
+		fmt.Println(rec.Code, rec.Body.String())
+		if err := plinth.FlushReportedError(r.Context()); err != nil {
+			fmt.Println("logged:", err)
+		}
+	}
+
+	// Output:
+	// 200 {"status":"ready"}
+	// 503 {"error":{"code":"service_unavailable","message":"Service Unavailable"}}
+	// logged: Service Unavailable: redis: connection refused
 }
 
 func ExampleClientIPResolver() {

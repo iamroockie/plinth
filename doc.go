@@ -12,6 +12,8 @@
 //   - [ClientIPResolver] finds the client address behind trusted proxies.
 //   - [JSONMux] makes [http.ServeMux] answer unknown routes and methods with JSON.
 //   - [PathInt], [PathUUID] and [QueryInt] parse request parameters.
+//   - [Healthz] and [Readyz] answer liveness and readiness probes; [Readyz]
+//     runs a [CheckFunc] for every dependency.
 //
 // Error responses have this form, with details present only for
 // [ValidationError]:

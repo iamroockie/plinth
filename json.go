@@ -13,6 +13,9 @@ import (
 // [ParseRequestJSON] reads unless [WithBodyLimit] or [WithoutBodyLimit] is used.
 const DefaultBodyLimit int64 = 1 << 20
 
+// Map is a shorthand for JSON objects in responses.
+type Map map[string]any
+
 // ParseOption configures [ParseRequestJSON].
 type ParseOption func(*parseConfig)
 

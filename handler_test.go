@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -217,11 +218,12 @@ func TestRespondJSONDoesNotLeakCause(t *testing.T) {
 func TestRespondJSONValidationDetails(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec, _ := serveRespondJSON(t, r, func(*http.Request) (*Response, error) {
-		return nil, ValidationError(ErrorDetails{"name": "required"})
+		return nil, ValidationError(FieldViolation{Field: "name", Code: "required"})
 	})
 
 	body := decodeErrorBody(t, rec)
-	if rec.Code != http.StatusUnprocessableEntity || body.Error.Details["name"] != "required" {
+	want := []FieldViolation{{Field: "name", Code: "required"}}
+	if rec.Code != http.StatusUnprocessableEntity || !reflect.DeepEqual(body.Error.Details, want) {
 		t.Errorf("response = %d %s, want 422 with details", rec.Code, rec.Body.String())
 	}
 }

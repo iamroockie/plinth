@@ -9,18 +9,14 @@ import (
 // error responses.
 type ErrorCode string
 
-// ErrorDetails holds messages about individual fields, sent in the "details"
-// field of error responses. See [ValidationError].
-type ErrorDetails map[string]string
-
 type errorEnvelope struct {
 	Error apiError `json:"error"`
 }
 
 type apiError struct {
-	Code    ErrorCode    `json:"code"`
-	Message string       `json:"message"`
-	Details ErrorDetails `json:"details,omitempty"`
+	Code    ErrorCode        `json:"code"`
+	Message string           `json:"message"`
+	Details []FieldViolation `json:"details,omitempty"`
 
 	status int
 	cause  error
@@ -116,19 +112,6 @@ func GatewayTimeoutError(cause error) error {
 // [CodeRequestEntityTooLarge].
 func RequestEntityTooLargeError(cause error) error {
 	return NewError(http.StatusRequestEntityTooLarge, CodeRequestEntityTooLarge, "", cause)
-}
-
-// ValidationError returns a 422 error with code [CodeValidation] and the message
-// "Validation failed". The details are sent to the client, so they must not
-// contain anything private.
-func ValidationError(details ErrorDetails) error {
-	return apiError{
-		Code:    CodeValidation,
-		Message: "Validation failed",
-		Details: details,
-		status:  http.StatusUnprocessableEntity,
-		cause:   nil,
-	}
 }
 
 // ErrorStatus returns the status and code carried by err or by an error it wraps,

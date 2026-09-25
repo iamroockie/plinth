@@ -11,9 +11,9 @@ import (
 
 type errorBody struct {
 	Error struct {
-		Code    ErrorCode    `json:"code"`
-		Message string       `json:"message"`
-		Details ErrorDetails `json:"details"`
+		Code    ErrorCode        `json:"code"`
+		Message string           `json:"message"`
+		Details []FieldViolation `json:"details"`
 	} `json:"error"`
 }
 

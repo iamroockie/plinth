@@ -3,6 +3,7 @@ package plinth_test
 import (
 	"context"
 	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -33,7 +34,9 @@ func ExampleRespondJSON() {
 			return nil, err
 		}
 		if in.Name == "" {
-			return nil, plinth.ValidationError(plinth.ErrorDetails{"name": "required"})
+			return nil, plinth.ValidationError(
+				plinth.FieldViolation{Field: "name", Code: "required"},
+			)
 		}
 
 		resp := plinth.NewResponse(http.StatusCreated, map[string]string{"name": in.Name})
@@ -56,9 +59,12 @@ func ExampleRespondJSON() {
 	//   "error": {
 	//     "code": "validation_error",
 	//     "message": "Validation failed",
-	//     "details": {
-	//       "name": "required"
-	//     }
+	//     "details": [
+	//       {
+	//         "field": "name",
+	//         "code": "required"
+	//       }
+	//     ]
 	//   }
 	// }
 	// 400 {
@@ -67,6 +73,81 @@ func ExampleRespondJSON() {
 	//     "message": "Bad Request"
 	//   }
 	// }
+}
+
+func ExampleMatchViolations() {
+	type createMonitor struct {
+		URL             string `json:"url"`
+		IntervalSeconds int    `json:"interval_seconds"`
+	}
+
+	// Sentinel errors of the domain validation.
+	var (
+		errUnsupportedScheme = errors.New("unsupported URL scheme")
+		errIntervalRange     = errors.New("interval out of range")
+	)
+	validate := func(m createMonitor) error {
+		var errs []error
+		if !strings.HasPrefix(m.URL, "https://") {
+			errs = append(errs, errUnsupportedScheme)
+		}
+		if m.IntervalSeconds < 10 || m.IntervalSeconds > 86400 {
+			errs = append(errs, errIntervalRange)
+		}
+		return errors.Join(errs...)
+	}
+
+	// Violations are returned in the order of the rules.
+	rules := []plinth.FieldRule{
+		{
+			Err:    errIntervalRange,
+			Field:  "interval_seconds",
+			Code:   "out_of_range",
+			Params: plinth.Map{"min": 10, "max": 86400},
+		},
+		{Err: errUnsupportedScheme, Field: "url", Code: "unsupported_scheme"},
+	}
+
+	handler := plinth.RespondJSON(func(r *http.Request) (*plinth.Response, error) {
+		in, err := plinth.ParseRequestJSON[createMonitor](r)
+		if err != nil {
+			return nil, err
+		}
+		if err := validate(in); err != nil {
+			if v := plinth.MatchViolations(err, rules...); len(v) > 0 {
+				return nil, plinth.ValidationError(v...)
+			}
+			return nil, err
+		}
+		return plinth.NewResponse(http.StatusCreated, in), nil
+	})
+
+	body := `{"url":"ftp://example.com","interval_seconds":5}`
+	r := httptest.NewRequest(http.MethodPost, "/monitors", strings.NewReader(body))
+	r.Header.Set(plinth.HeaderContentType, plinth.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, r)
+
+	// The order of keys within params is not specified, so the response is
+	// decoded and printed with fmt, which sorts them.
+	var resp struct {
+		Error struct {
+			Code    plinth.ErrorCode        `json:"code"`
+			Details []plinth.FieldViolation `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		panic(err)
+	}
+	fmt.Println(rec.Code, resp.Error.Code)
+	for _, v := range resp.Error.Details {
+		fmt.Println(v.Field, v.Code, v.Params)
+	}
+
+	// Output:
+	// 422 validation_error
+	// interval_seconds out_of_range map[max:86400 min:10]
+	// url unsupported_scheme map[]
 }
 
 func ExampleNewError() {

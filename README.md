@@ -66,11 +66,12 @@ func main() {
 		logger.InfoContext(r.Context(), "loading user", "id", id)
 		return nil, plinth.NotFoundError(nil)
 	}))
+	mux.Handle("GET /healthz", plinth.Healthz())
 
 	handler := middleware.Chain(
 		middleware.RequestID(),
 		middleware.ClientIP(resolver),
-		middleware.RequestLog(logger, "/health"),
+		middleware.RequestLog(logger, "/healthz"),
 		middleware.ErrorLog(logger),
 		middleware.Recover(),
 		middleware.Timeout(10*time.Second),
@@ -196,6 +197,27 @@ X-Forwarded-For: 198.51.100.1, 203.0.113.7, 10.0.0.1   (peer 10.0.0.2)
 `http.ServeMux` answers unknown routes and wrong methods with plain text.
 `plinth.JSONMux(mux)` turns them into JSON `404 not_found` and
 `405 method_not_allowed` errors; the 405 keeps the `Allow` header.
+
+## Health checks
+
+```go
+mux.Handle("GET /healthz", plinth.Healthz())
+mux.Handle("GET /readyz", plinth.Readyz(2*time.Second, map[string]plinth.CheckFunc{
+	"postgres": pool.Ping,      // *pgxpool.Pool
+	"mysql":    db.PingContext, // *sql.DB
+	"redis": func(ctx context.Context) error { // *redis.Client
+		return rdb.Ping(ctx).Err()
+	},
+}))
+```
+
+`Healthz` always answers `200 {"status":"ok"}`. `Readyz` runs all checks
+concurrently and answers `200 {"status":"ready"}`, or `503 service_unavailable`
+if any of them fails, panics or does not answer within the timeout. The names
+show up in the error logged by the ErrorLog middleware, never in the response.
+
+Pass the probe paths to `middleware.RequestLog` so that successful probes do not
+flood the log; failed ones are still logged by ErrorLog.
 
 ## Request parameters
 

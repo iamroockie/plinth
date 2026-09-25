@@ -12,8 +12,9 @@
 //		if rec.Code != http.StatusUnprocessableEntity {
 //			t.Fatalf("status = %d, want 422", rec.Code)
 //		}
-//		if e := plinthtest.DecodeError(t, rec); e.Details["name"] != "required" {
-//			t.Errorf("details = %v, want name: required", e.Details)
+//		want := []plinth.FieldViolation{{Field: "name", Code: "required"}}
+//		if e := plinthtest.DecodeError(t, rec); !reflect.DeepEqual(e.Details, want) {
+//			t.Errorf("details = %v, want %v", e.Details, want)
 //		}
 //		if reported != nil {
 //			t.Errorf("unexpected reported error: %v", reported)
@@ -39,11 +40,13 @@ import (
 	"github.com/iamroockie/plinth"
 )
 
-// Error is the decoded "error" object of an error response.
+// Error is the decoded "error" object of an error response. Details is nil
+// unless the response has a "details" field, as a [plinth.ValidationError] does.
+// Numbers in Params are decoded as float64.
 type Error struct {
-	Code    plinth.ErrorCode    `json:"code"`
-	Message string              `json:"message"`
-	Details plinth.ErrorDetails `json:"details"`
+	Code    plinth.ErrorCode        `json:"code"`
+	Message string                  `json:"message"`
+	Details []plinth.FieldViolation `json:"details"`
 }
 
 // NewRequest returns a request for testing a handler, like

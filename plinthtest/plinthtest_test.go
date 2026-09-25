@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -265,12 +266,21 @@ func TestDecodeJSONFails(t *testing.T) {
 func TestDecodeError(t *testing.T) {
 	rec := httptest.NewRecorder()
 	plinth.WriteError(rec, httptest.NewRequest(http.MethodPost, "/", nil),
-		plinth.ValidationError(plinth.ErrorDetails{"name": "required"}))
+		plinth.ValidationError(
+			plinth.FieldViolation{
+				Field: "age", Code: "out_of_range", Params: plinth.Map{"max": 150},
+			},
+			plinth.FieldViolation{Field: "name", Code: "required"},
+		))
 
 	got := plinthtest.DecodeError(t, rec)
 
+	want := []plinth.FieldViolation{
+		{Field: "age", Code: "out_of_range", Params: plinth.Map{"max": float64(150)}},
+		{Field: "name", Code: "required"},
+	}
 	if got.Code != plinth.CodeValidation || got.Message != "Validation failed" ||
-		got.Details["name"] != "required" {
+		!reflect.DeepEqual(got.Details, want) {
 		t.Errorf("DecodeError = %+v, want the validation error", got)
 	}
 }

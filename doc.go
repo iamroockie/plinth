@@ -19,7 +19,9 @@
 // [ValidationError]:
 //
 //	{"error": {"code": "validation_error", "message": "Validation failed",
-//	  "details": {"name": "required"}}}
+//	  "details": [{"field": "name", "code": "required"}]}}
+//
+// [MatchViolations] turns validation errors into the violations in details.
 //
 // The middleware package provides request IDs, client IP resolution, logging,
 // panic recovery and timeouts that work with this package. The plinthtest

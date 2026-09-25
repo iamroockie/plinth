@@ -54,7 +54,9 @@ func main() {
 			return nil, err // 400, 413 or 415
 		}
 		if in.Name == "" {
-			return nil, plinth.ValidationError(plinth.ErrorDetails{"name": "required"})
+			return nil, plinth.ValidationError(
+				plinth.FieldViolation{Field: "name", Code: "required"},
+			)
 		}
 		return plinth.NewResponse(http.StatusCreated, in), nil
 	}))
@@ -94,7 +96,10 @@ Every error response has the same shape. `details` is present only for
 validation errors:
 
 ```json
-{"error": {"code": "validation_error", "message": "Validation failed", "details": {"name": "required"}}}
+{"error": {"code": "validation_error", "message": "Validation failed", "details": [
+  {"field": "interval_seconds", "code": "out_of_range", "params": {"min": 10, "max": 86400}},
+  {"field": "url", "code": "unsupported_scheme"}
+]}}
 ```
 
 Return an error from a `ResponseFunc`, or pass it to `plinth.WriteError`:
@@ -109,7 +114,7 @@ Return an error from a `ResponseFunc`, or pass it to `plinth.WriteError`:
 | `ConflictError(msg, cause)`     | 409    | `conflict`                 |
 | `RequestEntityTooLargeError(cause)` | 413 | `request_entity_too_large` |
 | `UnsupportedMediaTypeError(cause)`  | 415 | `unsupported_media_type`   |
-| `ValidationError(details)`      | 422    | `validation_error`         |
+| `ValidationError(violations...)` | 422   | `validation_error`         |
 | `TooManyRequestsError(cause)`   | 429    | `too_many_requests`        |
 | `InternalServerError(cause)`    | 500    | `internal_error`           |
 | `ServiceUnavailableError(cause)`| 503    | `service_unavailable`      |
@@ -128,6 +133,39 @@ error carries, for example for metrics or tests.
 - Errors with a 5xx status are reported with `plinth.ReportError` and logged by
   the `ErrorLog` middleware. Handlers can report errors that do not change the
   response in the same way.
+
+### Validation errors
+
+`details` is an array of `plinth.FieldViolation` in the order they were passed:
+
+- `field` is the field as it appears in the request body, with nested fields
+  written as `items[0].url`. It is `""` for a violation that is not about one
+  field, such as a dependency between fields.
+- `code` is a machine-readable reason. Its vocabulary is up to your API.
+- `params` holds the values a client needs to build a message, such as `min` and
+  `max`, and is omitted when empty.
+
+All three are sent to the client as is, so they must not contain anything
+private. A field may have several violations.
+
+`plinth.MatchViolations` maps sentinel errors of your validation to violations.
+It uses `errors.Is`, so it works with `errors.Join` and wrapped errors, and it
+returns every match in the order of the rules:
+
+```go
+var monitorRules = []plinth.FieldRule{
+	{Err: domain.ErrIntervalRange, Field: "interval_seconds", Code: "out_of_range",
+		Params: plinth.Map{"min": 10, "max": 86400}},
+	{Err: domain.ErrUnsupportedScheme, Field: "url", Code: "unsupported_scheme"},
+}
+
+if err := domain.ValidateMonitor(in); err != nil {
+	if v := plinth.MatchViolations(err, monitorRules...); len(v) > 0 {
+		return nil, plinth.ValidationError(v...)
+	}
+	return nil, err
+}
+```
 
 ## Middleware
 
@@ -261,8 +299,9 @@ func TestCreateUser(t *testing.T) {
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status = %d, want 422", rec.Code)
 	}
-	if e := plinthtest.DecodeError(t, rec); e.Details["name"] != "required" {
-		t.Errorf("details = %v, want name: required", e.Details)
+	want := []plinth.FieldViolation{{Field: "name", Code: "required"}}
+	if e := plinthtest.DecodeError(t, rec); !reflect.DeepEqual(e.Details, want) {
+		t.Errorf("details = %v, want %v", e.Details, want)
 	}
 	if reported != nil {
 		t.Errorf("unexpected reported error: %v", reported)

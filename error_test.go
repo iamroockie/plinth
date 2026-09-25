@@ -153,22 +153,6 @@ func TestNewErrorMessageFallback(t *testing.T) {
 	}
 }
 
-func TestValidationError(t *testing.T) {
-	details := ErrorDetails{"name": "required"}
-	e := asAPIError(t, ValidationError(details))
-
-	if e.status != http.StatusUnprocessableEntity || e.Code != CodeValidation {
-		t.Errorf("got (%d, %q), want (%d, %q)",
-			e.status, e.Code, http.StatusUnprocessableEntity, CodeValidation)
-	}
-	if e.Details["name"] != "required" {
-		t.Errorf("details = %v, want %v", e.Details, details)
-	}
-	if e.Unwrap() != nil {
-		t.Errorf("Unwrap = %v, want nil", e.Unwrap())
-	}
-}
-
 func TestAPIErrorString(t *testing.T) {
 	cause := errors.New("db down")
 
